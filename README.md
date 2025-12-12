@@ -5,6 +5,16 @@ Servidor Node para comunicação com impressoras locais a partir do [Gestor de P
 <img src="https://raw.githubusercontent.com/cleitonleonel/Impressora_GP_iFood/master/static/media/icons/png/AppIcon.png" alt="Your image title" width="250"/>
 
 ## OBS:
+
+Incluir Node automaticamente (opcional):
+
+```bash
+# Depois de gerar o .app, baixe/embuta o node dentro do bundle
+chmod +x utils/macos/embed_node.sh
+./utils/macos/embed_node.sh "$HOME/Applications/ImpressoraGPiFood.app" 12.22.12
+```
+
+O script `embed_node.sh` baixa o Node compatível com a arquitetura (x64/arm64) e atualiza o `start-server.sh` para usar o binário embutido.
 O objetivo desse projeto se deu pelo fato de que o gestor de pedidos disponibilizado para download não cobre sistemas linux
 bem como o app de impressão oficial, diante disso resolvi implementar algo de forma prática e funcional e é o que temos aqui.
 Este projeto requer node 12, versões superiores não funcionarão, use nvm.
@@ -33,6 +43,7 @@ source ~/.zshrc
 ## Verificar a Instalação do NVM
 
 Verifique se o NVM foi instalado corretamente executando o comando:
+
 
 ```sh
 nvm --version
