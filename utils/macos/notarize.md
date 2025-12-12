@@ -1,65 +1,118 @@
 # Codesign e Notarização (instruções)
 
-Este documento descreve como preparar e automatizar a assinatura (`codesign`) e notarização (`notarize`) do aplicativo macOS.
+Este documento descreve como preparar e automatizar a assinatura (`codesign`) e notarização do aplicativo macOS.
 
-Requisitos
+**Recomendação:** use `notarytool` (moderno) em vez de `altool` (descontinuado).
+
+## Requisitos
+
 - Conta Apple Developer ativa.
-- Certificado de Developer ID Application exportado como `.p12` (incluindo chave privada).
-- Senha de app específico da Apple para `altool` (ou usar `notarytool` com API key).
+- Certificado de Developer ID Application exportado como `.p12` (para codesign; opcional).
+- API key do App Store Connect (para `notarytool`; recomendado).
 
-Gerar arquivo P12
+## Obter App Store Connect API key (notarytool — recomendado)
+
+1. Acesse https://appstoreconnect.apple.com/ → Users and Access → Keys.
+2. Clique em "+" para criar uma nova App Store Connect API key.
+3. Preenchimento obrigatório:
+   - Name: ex. "GitHub Actions Notarization"
+   - Access: "Developer"
+4. Clique em Create.
+5. Na próxima tela, copie/guarde:
+   - **Key ID** (ex. `ABC123DEF`)
+   - **Issuer ID** (ex. `12345678-1234-1234-1234-123456789abc`)
+6. Download do arquivo `.p8` (guarde-o seguro, é a chave privada).
+7. Configure os secrets no GitHub com esses valores (veja seção GitHub Actions abaixo).
+
+## Gerar arquivo P12 (para codesign — opcional)
+
+Se quiser assinar o app:
 1. No macOS com Xcode instalado, abra o Keychain Access.
-2. Exportar o certificado Developer ID Application e a chave privada como `cert.p12`.
+2. Exporte o certificado Developer ID Application e a chave privada como `cert.p12`.
 
-GitHub Actions (requisitos de secrets)
+## GitHub Actions (requisitos de secrets)
+
+Configure os seguintes secrets no repositório (Settings → Secrets and variables → Actions):
+
+**Para notarytool (recomendado):**
+- `APPLE_NOTARYTOOL_KEYID`: Key ID da API key.
+- `APPLE_NOTARYTOOL_ISSUEID`: Issuer ID.
+- `APPLE_NOTARYTOOL_KEY`: conteúdo do arquivo `.p8` (base64 ou texto simples).
+
+**Para codesign (opcional):**
 - `P12_BASE64`: conteúdo base64 do `cert.p12` (use `base64 cert.p12 | pbcopy`).
 - `P12_PASSWORD`: senha do arquivo p12 (se houver).
-- `APPLE_ID`: seu Apple ID (email).
-- `APP_SPECIFIC_PASSWORD`: senha de app específica (ou use notarytool com chave API).
 
-Passos locais (macOS)
-1. Importar o p12 para um keychain temporário:
+## Passos locais (macOS)
+
+### notarytool (recomendado)
+
+1. **Preparar a chave .p8:**
 
 ```bash
-security create-keychain -p mypw ci-build.keychain
-security import cert.p12 -k ci-build.keychain -P "p12password" -T /usr/bin/codesign
-security unlock-keychain -p mypw ci-build.keychain
-security list-keychains -s ci-build.keychain
+# Salve em um local seguro (ex. ~/.notary_key.p8)
+cat > ~/.notary_key.p8 <<'KEYEOF'
+# Colar aqui o conteúdo da chave .p8 baixada do App Store Connect
+KEYEOF
+chmod 600 ~/.notary_key.p8
 ```
 
-2. Assinar o app:
+2. **Assinar o app (opcional, se tiver certificado):**
 
 ```bash
-codesign --deep --force --verbose --sign "Developer ID Application: Your Name (TEAMID)" /path/to/ImpressoraGPiFood.app
-```
+ID=$(security find-identity -v -p codesigning | awk '/"/ {print $2; exit}' | tr -d '"')
+codesign --deep --force --verbose --sign "$ID" /path/to/ImpressoraGPiFood.app
 
-3. Verificar assinatura:
-
-```bash
+# Verificar assinatura
 codesign --verify --deep --strict --verbose=2 /path/to/ImpressoraGPiFood.app
-spctl -a -t exec -v /path/to/ImpressoraGPiFood.app
 ```
 
-4. Criar DMG (use `utils/macos/create_dmg.sh`).
-
-5. Notarizar usando `altool` (alternativa `notarytool` está disponível nas versões mais recentes):
+3. **Criar DMG:**
 
 ```bash
-xcrun altool --notarize-app -u "APPLE_ID" -p "APP_SPECIFIC_PASSWORD" --primary-bundle-id "br.ifood.ImpressoraGPiFood" -f /path/to/ImpressoraGPiFood.dmg
+./utils/macos/create_dmg.sh /path/to/ImpressoraGPiFood.app /path/to/ImpressoraGPiFood.dmg
 ```
 
-6. Verificar status e baixar UUID de notarização para esperar a conclusão:
+4. **Notarizar com notarytool:**
 
 ```bash
-xcrun altool --notarization-info <REQUEST_UUID> -u "APPLE_ID" -p "APP_SPECIFIC_PASSWORD"
+xcrun notarytool submit /path/to/ImpressoraGPiFood.dmg \
+  --key-id "ABC123DEF" \
+  --issuer-id "12345678-1234-1234-1234-123456789abc" \
+  --key ~/.notary_key.p8 \
+  --wait
 ```
 
-7. Depois de aprovado, use `stapler` para fixar a aprovação no pacote:
+Saída esperada: `The notarization request completed successfully`
+
+5. **Fixar a aprovação (staple):**
 
 ```bash
 xcrun stapler staple /path/to/ImpressoraGPiFood.dmg
 ```
 
-Observações
+Agora o DMG está pronto para distribuição!
+
+### altool (legado, não recomendado)
+
+Se preferir usar `altool` (descontinuado):
+
+```bash
+# Submeter para notarização
+xcrun altool --notarize-app -u "seu@email.com" -p "app-senha" \
+  --primary-bundle-id "br.ifood.ImpressoraGPiFood" \
+  -f /path/to/ImpressoraGPiFood.dmg
+
+# Verá um UUID; use-o para verificar o status
+xcrun altool --notarization-info <UUID> -u "seu@email.com" -p "app-senha"
+
+# Após aprovação, fixe a aprovação
+xcrun stapler staple /path/to/ImpressoraGPiFood.dmg
+```
+
+## Observações
+
 - Notarização e codesign exigem um ambiente macOS com Xcode command line tools.
-- Para automação no GitHub Actions, o workflow `.github/workflows/release-macos.yml` inclui passos para importar o p12 e rodar a notarização via `altool`. Configure os `secrets` citados antes de rodar.
+- **Recomendado:** usar `notarytool` com API key (mais seguro, mais moderno, sem expiração de senha).
+- O workflow `.github/workflows/release-macos.yml` está configurado para usar `notarytool`.
+- Para instruções locais passo-a-passo, veja também [BUILD_DMG_LOCAL.md](BUILD_DMG_LOCAL.md).

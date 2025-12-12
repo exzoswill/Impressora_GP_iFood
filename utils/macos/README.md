@@ -49,4 +49,43 @@ chmod +x utils/macos/embed_node.sh
 
 O script também atualiza o `start-server.sh` do bundle para priorizar o `node` embutido.
 
+Build local do DMG
+
+Para criar um `.dmg` a partir do `.app` localmente no macOS:
+
+```bash
+chmod +x utils/macos/create_dmg.sh
+./utils/macos/create_dmg.sh "$HOME/Applications/ImpressoraGPiFood.app" "$HOME/Desktop/ImpressoraGPiFood.dmg"
+```
+
+Ver [BUILD_DMG_LOCAL.md](BUILD_DMG_LOCAL.md) para instruções detalhadas (codesign, notarização com `altool` ou `notarytool`, etc).
+
+CI/CD (GitHub Actions)
+
+O workflow `.github/workflows/release-macos.yml` automatiza:
+1. Criação do `.app`.
+2. Embutir Node.
+3. Codesign (se `P12_BASE64` + `P12_PASSWORD` forem fornecidos).
+4. Criação do DMG.
+5. Notarização com `notarytool` (se `APPLE_NOTARYTOOL_KEYID`, `APPLE_NOTARYTOOL_ISSUEID` e `APPLE_NOTARYTOOL_KEY` forem fornecidos).
+
+Secrets necessários (no repositório GitHub):
+- `P12_BASE64` e `P12_PASSWORD` (para codesign; opcionais).
+- `APPLE_NOTARYTOOL_KEYID`, `APPLE_NOTARYTOOL_ISSUEID`, `APPLE_NOTARYTOOL_KEY` (para notarização com notarytool; recomendado).
+- Opcional: `NODE_VERSION` (ex.: `12.22.12`).
+
+Para executar manualmente:
+1. Configure os secrets (Settings → Secrets and variables → Actions).
+2. Vá em Actions → Build and Release macOS → Run workflow → selecione branch `macos-from-clean` ou `macos-bundle` e clique em Run workflow.
+
+Existe um script `embed_node.sh` que baixa um binário Node.js para macOS (x64/arm64) e o coloca dentro do bundle:
+
+```bash
+# Após criar o app com create_app.sh
+chmod +x utils/macos/embed_node.sh
+./utils/macos/embed_node.sh "$HOME/Applications/ImpressoraGPiFood.app" 12.22.12
+```
+
+O script também atualiza o `start-server.sh` do bundle para priorizar o `node` embutido.
+
 Se quiser, eu posso gerar um script opcional que baixa um binário Node compatível e o coloca dentro do bundle (requer decisão sobre a versão alvo e arquitetura).

@@ -82,3 +82,4 @@ jobs:
           tag: v${{ github.run_number }}-macos
           file: ${{ runner.temp }}/ImpressoraGPiFood.dmg
           name: ImpressoraGPiFood.dmg
+
